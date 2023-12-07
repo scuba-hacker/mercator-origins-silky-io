@@ -65,10 +65,11 @@ bool timeOfFlightSensorAvailable = false;
 #ifdef ENABLE_ELEGANT_OTA_AT_COMPILE_TIME
   // see mercator_secrets.c for wifi login globals
   #include <WiFi.h>
+  #include <Update.h>
   #include <AsyncTCP.h>
   #include <ESPAsyncWebServer.h>
   #include <AsyncElegantOTA.h>
-  bool otaActiveListening=true;   // OTA updates toggle
+  bool otaActive=true;   // OTA updates toggle
   AsyncWebServer asyncWebServer(80);
 #endif
 
@@ -252,7 +253,7 @@ char testMessageToMako[16]="";
 
 void loop() 
 {
-  /* Light sensor and gesture sensor disabled
+#ifdef ENABLE_SENSORS_AT_COMPILE_TIME
   if (lightSensorAvailable)
   {
     float lux=0.0;
@@ -269,7 +270,8 @@ void loop()
     // deal with it later.
     takeTimeOfFlightMeasurementAndWriteToSerial();
   }
-*/
+#endif
+
 #if defined(ENABLE_PARSE_SERIAL)
   parseSerialCommand();
   delay(500);
@@ -308,136 +310,17 @@ void loop()
   }
 }
 
-/*
-// Light sensor and time of flight sensor disabled
-void getLux(float &l)
-{
-  BH1750.start();         //starts a measurement
-  l = BH1750.getLux();    //  waits until a conversion finished
-}
-
-void takeTimeOfFlightMeasurementAndWriteToSerial()
-{
-  VL53L4CX_MultiRangingData_t MultiRangingData;
-  VL53L4CX_MultiRangingData_t *pMultiRangingData = &MultiRangingData;
-
-  uint8_t NewDataReady = 0;
-  int no_of_object_found = 0, j;
-  char report[64];
-  int status;
-
-  do 
-  {
-    status = sensor_vl53l4cx_sat.VL53L4CX_GetMeasurementDataReady(&NewDataReady);
-  } 
-  while (!NewDataReady);
-
-  //Led on
-  digitalWrite(beetleLed, HIGH);
-
-  if ((!status) && (NewDataReady != 0)) 
-  {
-    status = sensor_vl53l4cx_sat.VL53L4CX_GetMultiRangingData(pMultiRangingData);
-    
-    no_of_object_found = pMultiRangingData->NumberOfObjectsFound;
-    
-    if (writeLogToSerial)
-    {
-      snprintf(report, sizeof(report), "VL53L4CX Satellite: Count=%d, #Objs=%1d ", pMultiRangingData->StreamCount, no_of_object_found);
-      USB_SERIAL_.print(report);
-      
-      for (j = 0; j < no_of_object_found; j++) 
-      {
-        if (j != 0) 
-        {
-          USB_SERIAL_.print("\r\n                               ");
-        }
-        
-        USB_SERIAL_.print("status=");
-        USB_SERIAL_.print(pMultiRangingData->RangeData[j].RangeStatus);
-        USB_SERIAL_.print(", D=");
-        USB_SERIAL_.print(pMultiRangingData->RangeData[j].RangeMilliMeter);
-        USB_SERIAL_.print("mm");
-        USB_SERIAL_.print(", Signal=");
-        USB_SERIAL_.print((float)pMultiRangingData->RangeData[j].SignalRateRtnMegaCps / 65536.0);
-        USB_SERIAL_.print(" Mcps, Ambient=");
-        USB_SERIAL_.print((float)pMultiRangingData->RangeData[j].AmbientRateRtnMegaCps / 65536.0);
-        USB_SERIAL_.print(" Mcps");
-      }
-      
-      USB_SERIAL_.println("");
-    }
-        
-    if (status == 0) 
-    {
-      status = sensor_vl53l4cx_sat.VL53L4CX_ClearInterruptAndStartMeasurement();
-    }
-  }
-  digitalWrite(beetleLed, LOW);
-}
-
-char* getTimeOfFlightSensorErrorString(VL53L4CX_Error e)
-{
-  switch (e)
-  {
-    case VL53L4CX_ERROR_NONE: return "VL53L4CX_ERROR_NONE";
-    case VL53L4CX_ERROR_CALIBRATION_WARNING: return "VL53L4CX_ERROR_CALIBRATION_WARNING";
-    case VL53L4CX_ERROR_MIN_CLIPPED: return "VL53L4CX_ERROR_MIN_CLIPPED";
-    case VL53L4CX_ERROR_UNDEFINED: return "VL53L4CX_ERROR_UNDEFINED";
-    case VL53L4CX_ERROR_INVALID_PARAMS: return "VL53L4CX_ERROR_INVALID_PARAMS";
-    case VL53L4CX_ERROR_NOT_SUPPORTED: return "VL53L4CX_ERROR_NOT_SUPPORTED";
-    case VL53L4CX_ERROR_RANGE_ERROR: return "VL53L4CX_ERROR_RANGE_ERROR";
-    case VL53L4CX_ERROR_TIME_OUT: return "VL53L4CX_ERROR_TIME_OUT";
-    case VL53L4CX_ERROR_MODE_NOT_SUPPORTED: return "VL53L4CX_ERROR_MODE_NOT_SUPPORTED";
-    case VL53L4CX_ERROR_BUFFER_TOO_SMALL: return "VL53L4CX_ERROR_BUFFER_TOO_SMALL";
-    case VL53L4CX_ERROR_COMMS_BUFFER_TOO_SMALL: return "VL53L4CX_ERROR_COMMS_BUFFER_TOO_SMALL";
-    case VL53L4CX_ERROR_GPIO_NOT_EXISTING: return "VL53L4CX_ERROR_GPIO_NOT_EXIS";
-    case VL53L4CX_ERROR_GPIO_FUNCTIONALITY_NOT_SUPPORTED: return "VL53L4CX_ERROR_GPIO_FUNCTIONALITY_NOT_SUPPORTED";
-    case VL53L4CX_ERROR_CONTROL_INTERFACE: return "VL53L4CX_ERROR_CONTROL_INTERFACE";
-    case VL53L4CX_ERROR_INVALID_COMMAND: return "VL53L4CX_ERROR_INVALID_COMMAND";
-    case VL53L4CX_ERROR_DIVISION_BY_ZERO : return "VL53L4CX_ERROR_DIVISION_BY_ZERO";
-    case VL53L4CX_ERROR_REF_SPAD_INIT: return "VL53L4CX_ERROR_REF_SPAD_INIT";
-    case VL53L4CX_ERROR_GPH_SYNC_CHECK_FAIL: return "VL53L4CX_ERROR_GPH_SYNC_CHECK_FAIL";
-    case VL53L4CX_ERROR_STREAM_COUNT_CHECK_FAIL: return "VL53L4CX_ERROR_STREAM_COUNT_CHECK_FAIL";
-    case VL53L4CX_ERROR_GPH_ID_CHECK_FAIL: return "VL53L4CX_ERROR_GPH_ID_CHECK_FAIL";
-    case VL53L4CX_ERROR_ZONE_STREAM_COUNT_CHECK_FAIL: return "VL53L4CX_ERROR_ZONE_STREAM_COUNT_CHECK_FAIL";
-    case VL53L4CX_ERROR_ZONE_GPH_ID_CHECK_FAIL: return "VL53L4CX_ERROR_ZONE_GPH_ID_CHECK_FAIL";
-    case VL53L4CX_ERROR_XTALK_EXTRACTION_NO_SAMPLE_FAIL: return "VL53L4CX_ERROR_XTALK_EXTRACTION_NO_SAMPLE_F";
-    case VL53L4CX_ERROR_XTALK_EXTRACTION_SIGMA_LIMIT_FAIL: return "VL53L4CX_ERROR_XTALK_EXTRACTION_SIGMA_LIMIT_";
-    case VL53L4CX_ERROR_OFFSET_CAL_NO_SAMPLE_FAIL: return "VL53L4CX_ERROR_OFFSET_CAL_NO_SAMPLE_FAIL";
-    case VL53L4CX_ERROR_OFFSET_CAL_NO_SPADS_ENABLED_FAIL: return "VL53L4CX_ERROR_OFFSET_CAL_NO_SPADS_ENABLED_FAIL";
-    case VL53L4CX_ERROR_ZONE_CAL_NO_SAMPLE_FAIL: return "VL53L4CX_ERROR_ZONE_CAL_NO_SAMPLE_FAIL";
-    case VL53L4CX_ERROR_TUNING_PARM_KEY_MISMATCH: return "VL53L4CX_WARNING_REF_SPAD_CHAR_NOT_ENOUGH_SPADS";
-    case VL53L4CX_WARNING_REF_SPAD_CHAR_NOT_ENOUGH_SPADS: return "VL53L4CX_WARNING_REF_SPAD_CHAR_NOT_ENOUGH_SPADS";
-    case VL53L4CX_WARNING_REF_SPAD_CHAR_RATE_TOO_HIGH: return "VL53L4CX_WARNING_REF_SPAD_CHAR_RATE_TOO_HIGH";
-    case VL53L4CX_WARNING_REF_SPAD_CHAR_RATE_TOO_LOW: return "VL53L4CX_WARNING_REF_SPAD_CHAR_RATE_TOO_LOW";
-    case VL53L4CX_WARNING_OFFSET_CAL_MISSING_SAMPLES: return "VL53L4CX_WARNING_OFFSET_CAL_MISSING_SAMPLES";
-    case VL53L4CX_WARNING_OFFSET_CAL_SIGMA_TOO_HIGH: return "VL53L4CX_WARNING_OFFSET_CAL_SIGMA_TOO_HIGH";
-    case VL53L4CX_WARNING_OFFSET_CAL_RATE_TOO_HIGH: return "VL53L4CX_WARNING_OFFSET_CAL_RATE_TOO_HI";
-    case VL53L4CX_WARNING_OFFSET_CAL_SPAD_COUNT_TOO_LOW: return "VL53L4CX_WARNING_OFFSET_CAL_SPAD_COUNT_TOO_LOW";
-    case VL53L4CX_WARNING_ZONE_CAL_MISSING_SAMPLES: return "VL53L4CX_WARNING_ZONE_CAL_MISSING_SAMPLES";
-    case VL53L4CX_WARNING_ZONE_CAL_SIGMA_TOO_HIGH: return "VL53L4CX_WARNING_ZONE_CAL_SIGMA_TOO_HIGH";
-    case VL53L4CX_WARNING_ZONE_CAL_RATE_TOO_HIGH: return "VL53L4CX_WARNING_ZONE_CAL_RATE_TOO_HIGH";
-    case VL53L4CX_WARNING_XTALK_MISSING_SAMPLES: return "VL53L4CX_WARNING_XTALK_MISSING_SAMPLES";
-    case VL53L4CX_WARNING_XTALK_NO_SAMPLES_FOR_GRADIENT: return "VL53L4CX_WARNING_XTALK_NO_SAMPLES_FOR_GRADIENT";
-    case VL53L4CX_WARNING_XTALK_SIGMA_LIMIT_FOR_GRADIENT: return "VL53L4CX_WARNING_XTALK_SIGMA_LIMIT_FOR_GRADIENT";
-    case VL53L4CX_ERROR_NOT_IMPLEMENTED: return "VL53L4CX_ERROR_NOT_IMPLEMENTED";
-    case VL53L4CX_ERROR_PLATFORM_SPECIFIC_START: return "VL53L4CX_ERROR_PLATFORM_SPECIFIC_START";
-    default: return "Undefined enum";
-  }
-}
-*/
 
 
 void toggleOTAActive()
 {
   #ifdef ENABLE_ELEGANT_OTA_AT_COMPILE_TIME
 
-   if (otaActiveListening)
+   if (otaActive)
    {
      asyncWebServer.end();
      USB_SERIAL_.println("OTA Disabled");
-     otaActiveListening=false;
+     otaActive=false;
    }
    else
    {
@@ -445,7 +328,7 @@ void toggleOTAActive()
      {
        asyncWebServer.begin();
        USB_SERIAL_.printf("OTA Enabled");
-       otaActiveListening=true;
+       otaActive=true;
      }
      else
      {
@@ -461,11 +344,11 @@ void toggleWiFiActive()
   #ifdef ENABLE_ELEGANT_OTA_AT_COMPILE_TIME
    if (WiFi.status() == WL_CONNECTED)
    {
-      if (otaActiveListening)
+      if (otaActive)
       {
          asyncWebServer.end();
          USB_SERIAL_.println("OTA Disabled");
-         otaActiveListening=false;
+         otaActive=false;
       }
 
        WiFi.disconnect();
@@ -1287,6 +1170,124 @@ void initTimeOfFlightSensor()
          USB_SERIAL_.printf("Error: Adafruit VL53L4CX Time Of Flight Sensor initialisation error: %i %s\n",initError, TOFErrorBuffer); 
       timeOfFlightSensorAvailable = false;
     }
+  }
+}
+
+// Light sensor and time of flight sensor disabled
+void getLux(float &l)
+{
+  BH1750.start();         //starts a measurement
+  l = BH1750.getLux();    //  waits until a conversion finished
+}
+
+void takeTimeOfFlightMeasurementAndWriteToSerial()
+{
+  VL53L4CX_MultiRangingData_t MultiRangingData;
+  VL53L4CX_MultiRangingData_t *pMultiRangingData = &MultiRangingData;
+
+  uint8_t NewDataReady = 0;
+  int no_of_object_found = 0, j;
+  char report[64];
+  int status;
+
+  do 
+  {
+    status = sensor_vl53l4cx_sat.VL53L4CX_GetMeasurementDataReady(&NewDataReady);
+  } 
+  while (!NewDataReady);
+
+  //Led on
+  digitalWrite(beetleLed, HIGH);
+
+  if ((!status) && (NewDataReady != 0)) 
+  {
+    status = sensor_vl53l4cx_sat.VL53L4CX_GetMultiRangingData(pMultiRangingData);
+    
+    no_of_object_found = pMultiRangingData->NumberOfObjectsFound;
+    
+    if (writeLogToSerial)
+    {
+      snprintf(report, sizeof(report), "VL53L4CX Satellite: Count=%d, #Objs=%1d ", pMultiRangingData->StreamCount, no_of_object_found);
+      USB_SERIAL_.print(report);
+      
+      for (j = 0; j < no_of_object_found; j++) 
+      {
+        if (j != 0) 
+        {
+          USB_SERIAL_.print("\r\n                               ");
+        }
+        
+        USB_SERIAL_.print("status=");
+        USB_SERIAL_.print(pMultiRangingData->RangeData[j].RangeStatus);
+        USB_SERIAL_.print(", D=");
+        USB_SERIAL_.print(pMultiRangingData->RangeData[j].RangeMilliMeter);
+        USB_SERIAL_.print("mm");
+        USB_SERIAL_.print(", Signal=");
+        USB_SERIAL_.print((float)pMultiRangingData->RangeData[j].SignalRateRtnMegaCps / 65536.0);
+        USB_SERIAL_.print(" Mcps, Ambient=");
+        USB_SERIAL_.print((float)pMultiRangingData->RangeData[j].AmbientRateRtnMegaCps / 65536.0);
+        USB_SERIAL_.print(" Mcps");
+      }
+      
+      USB_SERIAL_.println("");
+    }
+        
+    if (status == 0) 
+    {
+      status = sensor_vl53l4cx_sat.VL53L4CX_ClearInterruptAndStartMeasurement();
+    }
+  }
+  digitalWrite(beetleLed, LOW);
+}
+
+char* getTimeOfFlightSensorErrorString(VL53L4CX_Error e)
+{
+  switch (e)
+  {
+    case VL53L4CX_ERROR_NONE: return "VL53L4CX_ERROR_NONE";
+    case VL53L4CX_ERROR_CALIBRATION_WARNING: return "VL53L4CX_ERROR_CALIBRATION_WARNING";
+    case VL53L4CX_ERROR_MIN_CLIPPED: return "VL53L4CX_ERROR_MIN_CLIPPED";
+    case VL53L4CX_ERROR_UNDEFINED: return "VL53L4CX_ERROR_UNDEFINED";
+    case VL53L4CX_ERROR_INVALID_PARAMS: return "VL53L4CX_ERROR_INVALID_PARAMS";
+    case VL53L4CX_ERROR_NOT_SUPPORTED: return "VL53L4CX_ERROR_NOT_SUPPORTED";
+    case VL53L4CX_ERROR_RANGE_ERROR: return "VL53L4CX_ERROR_RANGE_ERROR";
+    case VL53L4CX_ERROR_TIME_OUT: return "VL53L4CX_ERROR_TIME_OUT";
+    case VL53L4CX_ERROR_MODE_NOT_SUPPORTED: return "VL53L4CX_ERROR_MODE_NOT_SUPPORTED";
+    case VL53L4CX_ERROR_BUFFER_TOO_SMALL: return "VL53L4CX_ERROR_BUFFER_TOO_SMALL";
+    case VL53L4CX_ERROR_COMMS_BUFFER_TOO_SMALL: return "VL53L4CX_ERROR_COMMS_BUFFER_TOO_SMALL";
+    case VL53L4CX_ERROR_GPIO_NOT_EXISTING: return "VL53L4CX_ERROR_GPIO_NOT_EXIS";
+    case VL53L4CX_ERROR_GPIO_FUNCTIONALITY_NOT_SUPPORTED: return "VL53L4CX_ERROR_GPIO_FUNCTIONALITY_NOT_SUPPORTED";
+    case VL53L4CX_ERROR_CONTROL_INTERFACE: return "VL53L4CX_ERROR_CONTROL_INTERFACE";
+    case VL53L4CX_ERROR_INVALID_COMMAND: return "VL53L4CX_ERROR_INVALID_COMMAND";
+    case VL53L4CX_ERROR_DIVISION_BY_ZERO : return "VL53L4CX_ERROR_DIVISION_BY_ZERO";
+    case VL53L4CX_ERROR_REF_SPAD_INIT: return "VL53L4CX_ERROR_REF_SPAD_INIT";
+    case VL53L4CX_ERROR_GPH_SYNC_CHECK_FAIL: return "VL53L4CX_ERROR_GPH_SYNC_CHECK_FAIL";
+    case VL53L4CX_ERROR_STREAM_COUNT_CHECK_FAIL: return "VL53L4CX_ERROR_STREAM_COUNT_CHECK_FAIL";
+    case VL53L4CX_ERROR_GPH_ID_CHECK_FAIL: return "VL53L4CX_ERROR_GPH_ID_CHECK_FAIL";
+    case VL53L4CX_ERROR_ZONE_STREAM_COUNT_CHECK_FAIL: return "VL53L4CX_ERROR_ZONE_STREAM_COUNT_CHECK_FAIL";
+    case VL53L4CX_ERROR_ZONE_GPH_ID_CHECK_FAIL: return "VL53L4CX_ERROR_ZONE_GPH_ID_CHECK_FAIL";
+    case VL53L4CX_ERROR_XTALK_EXTRACTION_NO_SAMPLE_FAIL: return "VL53L4CX_ERROR_XTALK_EXTRACTION_NO_SAMPLE_F";
+    case VL53L4CX_ERROR_XTALK_EXTRACTION_SIGMA_LIMIT_FAIL: return "VL53L4CX_ERROR_XTALK_EXTRACTION_SIGMA_LIMIT_";
+    case VL53L4CX_ERROR_OFFSET_CAL_NO_SAMPLE_FAIL: return "VL53L4CX_ERROR_OFFSET_CAL_NO_SAMPLE_FAIL";
+    case VL53L4CX_ERROR_OFFSET_CAL_NO_SPADS_ENABLED_FAIL: return "VL53L4CX_ERROR_OFFSET_CAL_NO_SPADS_ENABLED_FAIL";
+    case VL53L4CX_ERROR_ZONE_CAL_NO_SAMPLE_FAIL: return "VL53L4CX_ERROR_ZONE_CAL_NO_SAMPLE_FAIL";
+    case VL53L4CX_ERROR_TUNING_PARM_KEY_MISMATCH: return "VL53L4CX_WARNING_REF_SPAD_CHAR_NOT_ENOUGH_SPADS";
+    case VL53L4CX_WARNING_REF_SPAD_CHAR_NOT_ENOUGH_SPADS: return "VL53L4CX_WARNING_REF_SPAD_CHAR_NOT_ENOUGH_SPADS";
+    case VL53L4CX_WARNING_REF_SPAD_CHAR_RATE_TOO_HIGH: return "VL53L4CX_WARNING_REF_SPAD_CHAR_RATE_TOO_HIGH";
+    case VL53L4CX_WARNING_REF_SPAD_CHAR_RATE_TOO_LOW: return "VL53L4CX_WARNING_REF_SPAD_CHAR_RATE_TOO_LOW";
+    case VL53L4CX_WARNING_OFFSET_CAL_MISSING_SAMPLES: return "VL53L4CX_WARNING_OFFSET_CAL_MISSING_SAMPLES";
+    case VL53L4CX_WARNING_OFFSET_CAL_SIGMA_TOO_HIGH: return "VL53L4CX_WARNING_OFFSET_CAL_SIGMA_TOO_HIGH";
+    case VL53L4CX_WARNING_OFFSET_CAL_RATE_TOO_HIGH: return "VL53L4CX_WARNING_OFFSET_CAL_RATE_TOO_HI";
+    case VL53L4CX_WARNING_OFFSET_CAL_SPAD_COUNT_TOO_LOW: return "VL53L4CX_WARNING_OFFSET_CAL_SPAD_COUNT_TOO_LOW";
+    case VL53L4CX_WARNING_ZONE_CAL_MISSING_SAMPLES: return "VL53L4CX_WARNING_ZONE_CAL_MISSING_SAMPLES";
+    case VL53L4CX_WARNING_ZONE_CAL_SIGMA_TOO_HIGH: return "VL53L4CX_WARNING_ZONE_CAL_SIGMA_TOO_HIGH";
+    case VL53L4CX_WARNING_ZONE_CAL_RATE_TOO_HIGH: return "VL53L4CX_WARNING_ZONE_CAL_RATE_TOO_HIGH";
+    case VL53L4CX_WARNING_XTALK_MISSING_SAMPLES: return "VL53L4CX_WARNING_XTALK_MISSING_SAMPLES";
+    case VL53L4CX_WARNING_XTALK_NO_SAMPLES_FOR_GRADIENT: return "VL53L4CX_WARNING_XTALK_NO_SAMPLES_FOR_GRADIENT";
+    case VL53L4CX_WARNING_XTALK_SIGMA_LIMIT_FOR_GRADIENT: return "VL53L4CX_WARNING_XTALK_SIGMA_LIMIT_FOR_GRADIENT";
+    case VL53L4CX_ERROR_NOT_IMPLEMENTED: return "VL53L4CX_ERROR_NOT_IMPLEMENTED";
+    case VL53L4CX_ERROR_PLATFORM_SPECIFIC_START: return "VL53L4CX_ERROR_PLATFORM_SPECIFIC_START";
+    default: return "Undefined enum";
   }
 }
 #endif
