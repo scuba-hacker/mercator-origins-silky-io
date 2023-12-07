@@ -1,7 +1,10 @@
-/*
-// ----- I WANT THIS CODE TO BE RUNNING FROM SD-card-API.c
-// ----- but the Arduino IDE won't compile it... Help!
-void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
+#include "SD-card-API.h"
+
+#include "FS.h"
+#include "SD.h"
+#include "SPI.h"
+
+void mercatorFS::listDir(fs::FS &fs, const char * dirname, uint8_t levels){
     Serial.printf("Listing directory: %s\n", dirname);
 
     File root = fs.open(dirname);
@@ -32,7 +35,7 @@ void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
     }
 }
 
-void createDir(fs::FS &fs, const char * path){
+void mercatorFS::createDir(fs::FS &fs, const char * path){
     Serial.printf("Creating Dir: %s\n", path);
     if(fs.mkdir(path)){
         Serial.printf("Dir created: %s\n",path);
@@ -41,7 +44,7 @@ void createDir(fs::FS &fs, const char * path){
     }
 }
 
-void removeDir(fs::FS &fs, const char * path){
+void mercatorFS::removeDir(fs::FS &fs, const char * path){
     Serial.printf("Removing Dir: %s\n", path);
     if(fs.rmdir(path)){
         Serial.printf("Dir removed: %s\n",path);
@@ -50,7 +53,7 @@ void removeDir(fs::FS &fs, const char * path){
     }
 }
 
-void readFile(fs::FS &fs, const char * path){
+void mercatorFS::readFile(fs::FS &fs, const char * path){
     Serial.printf("Reading file: %s\n", path);
 
     File file = fs.open(path);
@@ -66,7 +69,7 @@ void readFile(fs::FS &fs, const char * path){
     file.close();
 }
 
-void writeFile(fs::FS &fs, const char * path, const char * message){
+void mercatorFS::writeFile(fs::FS &fs, const char * path, const char * message){
     Serial.printf("Writing file: %s\n", path);
 
     File file = fs.open(path, FILE_WRITE);
@@ -82,7 +85,7 @@ void writeFile(fs::FS &fs, const char * path, const char * message){
     file.close();
 }
 
-void appendFile(fs::FS &fs, const char * path, const char * message){
+void mercatorFS::appendFile(fs::FS &fs, const char * path, const char * message){
     Serial.printf("Appending to file: %s\n", path);
 
     File file = fs.open(path, FILE_APPEND);
@@ -98,7 +101,7 @@ void appendFile(fs::FS &fs, const char * path, const char * message){
     file.close();
 }
 
-void renameFile(fs::FS &fs, const char * path1, const char * path2){
+void mercatorFS::renameFile(fs::FS &fs, const char * path1, const char * path2){
     Serial.printf("Renaming file %s to %s\n", path1, path2);
     if (fs.rename(path1, path2)) {
         Serial.printf("File renamed: %s to %s\n",path1, path2);
@@ -107,7 +110,7 @@ void renameFile(fs::FS &fs, const char * path1, const char * path2){
     }
 }
 
-void deleteFile(fs::FS &fs, const char * path){
+void mercatorFS::deleteFile(fs::FS &fs, const char * path){
     Serial.printf("Deleting file: %s\n", path);
     if(fs.remove(path)){
         Serial.printf("File deleted: %s\n",path);
@@ -116,7 +119,7 @@ void deleteFile(fs::FS &fs, const char * path){
     }
 }
 
-void testFileIO()
+void mercatorFS::testFileIO(uint8_t cardType)
 {
     Serial.print("SD Card Type: ");
     
@@ -156,7 +159,7 @@ void testFileIO()
     Serial.printf("Used space: %lluMB\n", SD.usedBytes() / (1024 * 1024));
 }
 
-void testFlashFileIO(fs::FS &fs, const char * path){
+void mercatorFS::testFlashFileIO(fs::FS &fs, const char * path){
     File file = fs.open(path);
     static uint8_t buf[512];
     size_t len = 0;
@@ -197,4 +200,4 @@ void testFlashFileIO(fs::FS &fs, const char * path){
     Serial.printf("%u bytes written for %u ms file: %s\n", 2048 * 512, end, path);
     file.close(); 
 }
-*/
+

@@ -33,14 +33,12 @@
 
 bool writeLogToSerial = false;
 
-/* // not currently used
+#ifdef ENABLE_SENSORS_AT_COMPILE_TIME
 // I2C Light Sensor
 // see https://github.com/Starmbi/hp_BH1750
 #include <hp_BH1750.h>
 hp_BH1750 BH1750;
-*/
 
-/* // not currently used
 // I2C Time of Flight sensor. Adafruit VL53L4CX
 // see https://learn.adafruit.com/adafruit-vl53l4cx-time-of-flight-distance-sensor
 #include <vl53l4cx_class.h>
@@ -49,7 +47,9 @@ hp_BH1750 BH1750;
 #define VL53L4CX_DEFAULT_DEVICE_ADDRESS 0x12
 
 VL53L4CX sensor_vl53l4cx_sat(&DEV_I2C, XSHUT_PIN);
-*/
+#endif
+
+
 //#define ENABLE_ELEGANT_OTA_AT_COMPILE_TIME
 #define ENABLE_ESPNOW_AT_COMPILE_TIME
 
@@ -116,20 +116,17 @@ const char* currentTrackFilename = NULL;
 uint32_t lastAudioGuidancePlayedAt = 0;
 const uint32_t audioGuidanceMinimumGap = 50;
 
-
 String musicList[numberOfTracks];   // SD card music playlist
 
-DFRobot_MAX98357A amplifier;   
+DFRobot_MAX98357A amplifier;
 
 void printMusicList(void);
 void parseSerialCommand(void);
 uint8_t getNextTrack();
-void testFlashFileIO(fs::FS &fs, const char * path);
 
 void toggleOTAActive();
 void toggleWiFiActive();
 bool connectWiFiNoOTANotM5(const char* _ssid, const char* _password, const char* label, uint32_t timeout);
-
 
 bool TeardownESPNow();
 void configAndStartUpESPNow();
@@ -137,6 +134,10 @@ bool ESPNowScanForPeer(esp_now_peer_info_t& peer, const char* peerSSIDPrefix);
 bool pairWithPeer(esp_now_peer_info_t& peer, const char* peerSSIDPrefix, int maxAttempts);
 bool ESPNowManagePeer(esp_now_peer_info_t& peer);
 void ESPNowDeletePeer(esp_now_peer_info_t& peer);
+
+void initSensors();
+void initLightSensor();
+void initTimeOfFlightSensor();
 
 void setup()
 {
@@ -165,72 +166,9 @@ void setup()
 
   delay(500);
 
-/*
-  if (enableLightSensor || enableTimeOfFlightSensor) 
-  {
-    DEV_I2C.begin();
-  }
-
-  delay(500);
-
-  // light sensor and time of flight sensor are disabled
-  if (enableLightSensor)
-  {
-    lightSensorAvailable = BH1750.begin(BH1750_TO_GROUND);// init the sensor with address pin connetcted to ground
-                                              // result (bool) wil be be "false" if no sensor found
-    if (!lightSensorAvailable) 
-    {
-       if (writeLogToSerial)
-        USB_SERIAL_.println("No BH1750 sensor found!");
-    }
-    else
-    {
-      if (writeLogToSerial)
-       USB_SERIAL_.println("BH1750 sensor initialised ok");
-    }
-  }
-
-  if (enableTimeOfFlightSensor)
-  {
-    // Configure VL53L4CX
-    sensor_vl53l4cx_sat.begin();
-  
-    // Switch off VL53L4CX
-    sensor_vl53l4cx_sat.VL53L4CX_Off();
-
-    //Initialize VL53L4CX
-    VL53L4CX_Error initError = sensor_vl53l4cx_sat.InitSensor(VL53L4CX_DEFAULT_DEVICE_ADDRESS);
-
-    if (initError == VL53L4CX_ERROR_NONE)
-    {
-      if (writeLogToSerial)
-        USB_SERIAL_.println("Adafruit VL53L4CX Time Of Flight Sensor Initialised ok");
-
-      VL53L4CX_Error measureError = sensor_vl53l4cx_sat.VL53L4CX_StartMeasurement();  
-
-      if (measureError == VL53L4CX_ERROR_NONE)
-      {
-        if (writeLogToSerial)
-           USB_SERIAL_.println("Adafruit VL53L4CX Time Of Flight Sensor Started Measurement ok");
-        timeOfFlightSensorAvailable = true;
-      }
-      else
-      {
-        const char* TOFErrorBuffer = getTimeOfFlightSensorErrorString(measureError);
-        if (writeLogToSerial)
-           USB_SERIAL_.printf("\nError: Adafruit VL53L4CX Time Of Flight Sensor startup measurement error: %i %s\n",measureError, TOFErrorBuffer);
-        timeOfFlightSensorAvailable = false;
-      }
-    }
-    else
-    {
-      const char* TOFErrorBuffer = getTimeOfFlightSensorErrorString(initError);
-      if (writeLogToSerial)
-         USB_SERIAL_.printf("Error: Adafruit VL53L4CX Time Of Flight Sensor initialisation error: %i %s\n",initError, TOFErrorBuffer); 
-      timeOfFlightSensorAvailable = false;
-    }
-  }
-*/
+#ifdef ENABLE_SENSORS_AT_COMPILE_TIME
+  initSensors();
+#endif
 
 #ifdef ENABLE_OTA_AT_COMPILE_TIME
   if (enableOTAServer)
@@ -371,7 +309,6 @@ void loop()
 }
 
 /*
-
 // Light sensor and time of flight sensor disabled
 void getLux(float &l)
 {
@@ -491,204 +428,6 @@ char* getTimeOfFlightSensorErrorString(VL53L4CX_Error e)
 }
 */
 
-// ----- I WANT THIS CODE TO BE RUNNING FROM SD-card-API.c
-// ----- but the Arduino IDE won't compile it... Help!
-void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
-    USB_SERIAL_.printf("Listing directory: %s\n", dirname);
-
-    File root = fs.open(dirname);
-    if(!root){
-        USB_SERIAL_.printf("Failed to open directory: %s\n",root);
-        return;
-    }
-    if(!root.isDirectory()){
-        USB_SERIAL_.printf("Not a directory: %s\n",root);
-        return;
-    }
-
-    File file = root.openNextFile();
-    while(file){
-        if(file.isDirectory()){
-            USB_SERIAL_.print("  DIR : ");
-            USB_SERIAL_.println(file.name());
-            if(levels){
-                listDir(fs, file.path(), levels -1);
-            }
-        } else {
-            USB_SERIAL_.print("  FILE: ");
-            USB_SERIAL_.print(file.name());
-            USB_SERIAL_.print("  SIZE: ");
-            USB_SERIAL_.println(file.size());
-        }
-        file = root.openNextFile();
-    }
-}
-
-void createDir(fs::FS &fs, const char * path){
-    USB_SERIAL_.printf("Creating Dir: %s\n", path);
-    if(fs.mkdir(path)){
-        USB_SERIAL_.printf("Dir created: %s\n",path);
-    } else {
-        USB_SERIAL_.printf("mkdir failed: %s\n",path);
-    }
-}
-
-void removeDir(fs::FS &fs, const char * path){
-    USB_SERIAL_.printf("Removing Dir: %s\n", path);
-    if(fs.rmdir(path)){
-        USB_SERIAL_.printf("Dir removed: %s\n",path);
-    } else {
-        USB_SERIAL_.printf("rmdir failed: %s\n",path);
-    }
-}
-
-void readFile(fs::FS &fs, const char * path){
-    USB_SERIAL_.printf("Reading file: %s\n", path);
-
-    File file = fs.open(path);
-    if(!file){
-        USB_SERIAL_.printf("Failed to open file for reading: %s\n",path);
-        return;
-    }
-
-    USB_SERIAL_.printf("Read from file: %s\n",path);
-    while(file.available()){
-        USB_SERIAL_.write(file.read());
-    }
-    file.close();
-}
-
-void writeFile(fs::FS &fs, const char * path, const char * message){
-    USB_SERIAL_.printf("Writing file: %s\n", path);
-
-    File file = fs.open(path, FILE_WRITE);
-    if(!file){
-        USB_SERIAL_.printf("Failed to open file for writing: %s\n",path);
-        return;
-    }
-    if(file.print(message)){
-        USB_SERIAL_.printf("File written: %s\n",path);
-    } else {
-        USB_SERIAL_.printf("Write failed: %s\n",path);
-    }
-    file.close();
-}
-
-void appendFile(fs::FS &fs, const char * path, const char * message){
-    USB_SERIAL_.printf("Appending to file: %s\n", path);
-
-    File file = fs.open(path, FILE_APPEND);
-    if(!file){
-        USB_SERIAL_.printf("Failed to open file for appending: %s\n",path);
-        return;
-    }
-    if(file.print(message)){
-        USB_SERIAL_.printf("Message appended: %s\n",path);
-    } else {
-        USB_SERIAL_.printf("Append failed: %s\n",path);
-    }
-    file.close();
-}
-
-void renameFile(fs::FS &fs, const char * path1, const char * path2){
-    USB_SERIAL_.printf("Renaming file %s to %s\n", path1, path2);
-    if (fs.rename(path1, path2)) {
-        USB_SERIAL_.printf("File renamed: %s to %s\n",path1, path2);
-    } else {
-        USB_SERIAL_.printf("Rename file failed: %s to %s\n",path1, path2);
-    }
-}
-
-void deleteFile(fs::FS &fs, const char * path){
-    USB_SERIAL_.printf("Deleting file: %s\n", path);
-    if(fs.remove(path)){
-        USB_SERIAL_.printf("File deleted: %s\n",path);
-    } else {
-        USB_SERIAL_.printf("Delete failed: %s\n",path);
-    }
-}
-
-void testFileIO()
-{
-    USB_SERIAL_.print("SD Card Type: ");
-    
-    if(cardType == CARD_MMC)
-    {
-        USB_SERIAL_.println("MMC");
-    } 
-    else if(cardType == CARD_SD)
-    {
-        USB_SERIAL_.println("SDSC");
-    } 
-    else if(cardType == CARD_SDHC)
-    {
-        USB_SERIAL_.println("SDHC");
-    } 
-    else 
-    {
-        USB_SERIAL_.println("UNKNOWN");
-    }
-
-    uint64_t cardSize = SD.cardSize() / (1024 * 1024);
-    USB_SERIAL_.printf("SD Card Size: %lluMB\n", cardSize);
-
-    listDir(SD, "/", 0);
-    createDir(SD, "/mydir");
-    listDir(SD, "/", 0);
-    removeDir(SD, "/mydir");
-    listDir(SD, "/", 2);
-    writeFile(SD, "/hello.txt", "Hello ");
-    appendFile(SD, "/hello.txt", "World!\n");
-    readFile(SD, "/hello.txt");
-    deleteFile(SD, "/foo.txt");
-    renameFile(SD, "/hello.txt", "/foo.txt");
-    readFile(SD, "/foo.txt");
-    testFlashFileIO(SD, "/test.txt");
-    USB_SERIAL_.printf("Total space: %lluMB\n", SD.totalBytes() / (1024 * 1024));
-    USB_SERIAL_.printf("Used space: %lluMB\n", SD.usedBytes() / (1024 * 1024));
-}
-
-void testFlashFileIO(fs::FS &fs, const char * path){
-    File file = fs.open(path);
-    static uint8_t buf[512];
-    size_t len = 0;
-    uint32_t start = millis();
-    uint32_t end = start;
-    if(file){
-        len = file.size();
-        size_t flen = len;
-        start = millis();
-        while(len){
-            size_t toRead = len;
-            if(toRead > 512){
-                toRead = 512;
-            }
-            file.read(buf, toRead);
-            len -= toRead;
-        }
-        end = millis() - start;
-        USB_SERIAL_.printf("%u bytes read for %u ms file: %s\n",flen, end, path);
-        file.close();
-    } else {
-        USB_SERIAL_.printf("Failed to open file for reading: %s\n",path);
-    }
-
-
-    file = fs.open(path, FILE_WRITE);
-    if(!file){
-        USB_SERIAL_.printf("Failed to open file for writing: %s\n",path);
-        return;
-    }
-
-    size_t i;
-    start = millis();
-    for(i=0; i<2048; i++){
-        file.write(buf, 512);
-    }
-    end = millis() - start;
-    USB_SERIAL_.printf("%u bytes written for %u ms file: %s\n", 2048 * 512, end, path);
-    file.close(); 
-}
 
 void toggleOTAActive()
 {
@@ -1470,4 +1209,84 @@ void ESPNowDeletePeer(esp_now_peer_info_t& peer)
   }
 }
  
+#endif
+
+#ifdef ENABLE_SENSORS_AT_COMPILE_TIME
+void initSensors()
+{
+  if (enableLightSensor || enableTimeOfFlightSensor) 
+  {
+    DEV_I2C.begin();
+
+    initLightSensor();
+    initTimeOfFlightSensor();
+
+    delay(500);
+  }
+}
+
+void initLightSensor()
+{
+
+  // light sensor and time of flight sensor are disabled
+  if (enableLightSensor)
+  {
+    lightSensorAvailable = BH1750.begin(BH1750_TO_GROUND);// init the sensor with address pin connetcted to ground
+                                              // result (bool) wil be be "false" if no sensor found
+    if (!lightSensorAvailable) 
+    {
+       if (writeLogToSerial)
+        USB_SERIAL_.println("No BH1750 sensor found!");
+    }
+    else
+    {
+      if (writeLogToSerial)
+       USB_SERIAL_.println("BH1750 sensor initialised ok");
+    }
+  }
+}
+
+void initTimeOfFlightSensor()
+{
+  if (enableTimeOfFlightSensor)
+  {
+    // Configure VL53L4CX
+    sensor_vl53l4cx_sat.begin();
+  
+    // Switch off VL53L4CX
+    sensor_vl53l4cx_sat.VL53L4CX_Off();
+
+    //Initialize VL53L4CX
+    VL53L4CX_Error initError = sensor_vl53l4cx_sat.InitSensor(VL53L4CX_DEFAULT_DEVICE_ADDRESS);
+
+    if (initError == VL53L4CX_ERROR_NONE)
+    {
+      if (writeLogToSerial)
+        USB_SERIAL_.println("Adafruit VL53L4CX Time Of Flight Sensor Initialised ok");
+
+      VL53L4CX_Error measureError = sensor_vl53l4cx_sat.VL53L4CX_StartMeasurement();  
+
+      if (measureError == VL53L4CX_ERROR_NONE)
+      {
+        if (writeLogToSerial)
+           USB_SERIAL_.println("Adafruit VL53L4CX Time Of Flight Sensor Started Measurement ok");
+        timeOfFlightSensorAvailable = true;
+      }
+      else
+      {
+        const char* TOFErrorBuffer = getTimeOfFlightSensorErrorString(measureError);
+        if (writeLogToSerial)
+           USB_SERIAL_.printf("\nError: Adafruit VL53L4CX Time Of Flight Sensor startup measurement error: %i %s\n",measureError, TOFErrorBuffer);
+        timeOfFlightSensorAvailable = false;
+      }
+    }
+    else
+    {
+      const char* TOFErrorBuffer = getTimeOfFlightSensorErrorString(initError);
+      if (writeLogToSerial)
+         USB_SERIAL_.printf("Error: Adafruit VL53L4CX Time Of Flight Sensor initialisation error: %i %s\n",initError, TOFErrorBuffer); 
+      timeOfFlightSensorAvailable = false;
+    }
+  }
+}
 #endif

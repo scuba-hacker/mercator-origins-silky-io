@@ -1,18 +1,24 @@
-/*
-// ----- I WANT THIS CODE TO BE RUNNING FROM SD-card-API.c/.h
-// ----- but the Arduino IDE won't compile it... Help!
+#ifndef SD_CARD_API_H
+#define SD_CARD_API_H
 
-#include "FS.h"
-#include "SD.h"
-#include "SPI.h"
+#include <stdint.h>
 
-void listDir(fs::FS &fs, const char * dirname, uint8_t levels);
-void createDir(fs::FS &fs, const char * path);
-void removeDir(fs::FS &fs, const char * path);
-void readFile(fs::FS &fs, const char * path);
-void writeFile(fs::FS &fs, const char * path, const char * message);
-void appendFile(fs::FS &fs, const char * path, const char * message);
-void renameFile(fs::FS &fs, const char * path1, const char * path2);
-void deleteFile(fs::FS &fs, const char * path);
-void testFileIO(fs::FS &fs, const char * path);
-*/
+namespace fs
+{
+    class FS;
+}
+namespace mercatorFS
+{
+    void listDir(fs::FS &fs, const char * dirname, uint8_t levels);
+    void createDir(fs::FS &fs, const char * path);
+    void removeDir(fs::FS &fs, const char * path);
+    void readFile(fs::FS &fs, const char * path);
+    void writeFile(fs::FS &fs, const char * path, const char * message);
+    void appendFile(fs::FS &fs, const char * path, const char * message);
+    void renameFile(fs::FS &fs, const char * path1, const char * path2);
+    void deleteFile(fs::FS &fs, const char * path);
+    void testFlashFileIO(fs::FS &fs, const char * path);
+    void testFileIO(uint8_t cardType);
+}
+
+#endif
