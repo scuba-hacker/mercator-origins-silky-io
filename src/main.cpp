@@ -19,6 +19,9 @@
 #include "FS.h"
 #include "SD.h"
 #include "SPI.h"
+#include "driver/uart.h"
+
+#include <driver/adc.h>
 
 //#include "SD-card-API.h"
 
@@ -98,7 +101,49 @@ bool timeOfFlightSensorAvailable = false;
 const int beetleLed = 10;
 const uint8_t I2S_AMP_BCLK_PIN = GPIO_NUM_0;      // YELLOW --> Audio AMP Pin was 0
 const uint8_t I2S_AMP_LRCLK_PIN = GPIO_NUM_1;     // BLUE --> Audio AMP Pin 1
-const uint8_t I2S_AMP_DIN_PIN = GPIO_NUM_2;       // GREEN --> Audio AMP Pin was 2
+const uint8_t I2S_AMP_DIN_PIN = GPIO_NUM_20;      // GREEN --> Audio AMP Pin was 2   (was GPIO2) GPIO_20 is labelled U0RXD
+
+const uint8_t BATTERY_ADC_PIN = GPIO_NUM_3;       // New voltage divider input (2 x 47k + 100nF capactior to ground) from GPIO2
+const uint8_t VOLTAGE_DIVIDER_MULTIPLIER = 2.0;   // 2.0 because of 47k/47k voltage divider on input
+
+void initBatteryADC()
+{
+  pinMode(BATTERY_ADC_PIN, INPUT);   // not strictly necessary, but clarifies that no internal pull-up/down is required
+  analogReadResolution(12);                         // 12 bit sample width
+  analogSetPinAttenuation(BATTERY_ADC_PIN, ADC_11db); // 0-2.45V range measurement
+
+  // calibration setup procedure
+  // https://docs.espressif.com/projects/esp-idf/en/v4.4/esp32c3/api-reference/peripherals/adc.html#_CPPv423esp_adc_cal_check_efuse19esp_adc_cal_value_t
+
+/*
+Software Calibration
+
+To convert ADC raw data to calibrated digital data, following steps should be followed:
+
+Check the eFuse to know if the software calibration is supported via esp_adc_cal_check_efuse().
+
+Calculate the ADC calibration characteristics via esp_adc_cal_characterize(). 
+The ADC software calibration characteristics are per ADC module and per attenuation. 
+For example, characteristics of ADC1 channel 0 under 11 dB attenuation are the same as 
+characteristics of ADC1 channel 2 under 11 dB attenuation. But characteristics of ADC1 channel 0 
+under 11 dB attenuation are different with characteristics of ADC2 channel 0 under 11 dB attenuation. 
+Also characteristics of ADC1 channel 0 under 11 dB attenuation are different with characteristics of 
+ADC1 channel 0 under 6 dB attenuation.
+
+Get the actual voltage value via esp_adc_cal_raw_to_voltage().
+*/
+}
+
+float getBatteryVoltage()
+{
+  // see calibration setup/procedure above.
+  return analogReadMilliVolts(BATTERY_ADC_PIN) * VOLTAGE_DIVIDER_MULTIPLIER / 1000.0;
+}
+
+uint16_t getBatteryADC()
+{
+  return analogRead(BATTERY_ADC_PIN);
+}
 
 const uint8_t SD_CS_PIN = GPIO_NUM_7;
 
@@ -144,8 +189,12 @@ void setup()
 {
   pinMode(beetleLed,OUTPUT);
 
+  initBatteryADC();
+
   // LED flash - we're alive!
+
   USB_SERIAL_.begin(115200);
+
   int warmUp=10;
   
   while (warmUp--)
@@ -229,7 +278,6 @@ void setup()
 
 //  amplifier.openFilter(bq_type_highpass, 500);
 //  amplifier.SDPlayerControl(SD_AMPLIFIER_PLAY);
-
 }
 
 char mako_espnow_buffer[256];
@@ -249,7 +297,7 @@ void publishToMakoTestMessage(const char* testMessage)
   }
 }
 
-char testMessageToMako[16]="";
+char testMessageToMako[32]="";
 
 void loop() 
 {
@@ -282,7 +330,7 @@ void loop()
     digitalWrite(beetleLed,HIGH);
     delay(100);
     digitalWrite(beetleLed,LOW);
-    snprintf(testMessageToMako,sizeof(testMessageToMako),"%is uptime",millis() / 1000);
+    snprintf(testMessageToMako,sizeof(testMessageToMako),"%is %.2f V",millis() / 1000,getBatteryVoltage());
     publishToMakoTestMessage(testMessageToMako);
   }
 
